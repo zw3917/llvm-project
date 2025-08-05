@@ -483,6 +483,10 @@ public:
   ///     symbol file doesn't support DWO files, both counts will be 0.
   virtual std::pair<uint32_t, uint32_t> GetDwoFileCounts() { return {0, 0}; }
 
+  /// Return the number of errors during the loading process for split-dwarf
+  /// files, 0 by default.
+  virtual uint32_t GetDwoLoadErrorCount(){ return 0; }
+
   virtual lldb::TypeSP
   MakeType(lldb::user_id_t uid, ConstString name,
            std::optional<uint64_t> byte_size, SymbolContextScope *context,

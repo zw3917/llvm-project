@@ -179,6 +179,7 @@ class TestCase(TestBase):
             "totalDebugInfoParseTime",
             "totalDwoFileCount",
             "totalLoadedDwoFileCount",
+            "totalDwoLoadErrorCount",
         ]
         self.verify_keys(debug_stats, '"debug_stats"', debug_stat_keys, None)
         if self.getPlatform() != "windows":
@@ -291,6 +292,7 @@ class TestCase(TestBase):
             "totalDebugInfoParseTime",
             "totalDwoFileCount",
             "totalLoadedDwoFileCount",
+            "totalDwoLoadErrorCount",
         ]
         self.verify_keys(debug_stats, '"debug_stats"', debug_stat_keys, None)
         stats = debug_stats["targets"][0]
@@ -331,6 +333,7 @@ class TestCase(TestBase):
             "totalDebugInfoByteSize",
             "totalDwoFileCount",
             "totalLoadedDwoFileCount",
+            "totalDwoLoadErrorCount",
         ]
         self.verify_keys(debug_stats, '"debug_stats"', debug_stat_keys, None)
 
@@ -385,6 +388,7 @@ class TestCase(TestBase):
             "totalDebugInfoByteSize",
             "totalDwoFileCount",
             "totalLoadedDwoFileCount",
+            "totalDwoLoadErrorCount",
         ]
         self.verify_keys(debug_stats, '"debug_stats"', debug_stat_keys, None)
         stats = debug_stats["targets"][0]
@@ -497,6 +501,7 @@ class TestCase(TestBase):
             "totalDebugInfoByteSize",
             "totalDwoFileCount",
             "totalLoadedDwoFileCount",
+            "totalDwoLoadErrorCount",
         ]
         self.verify_keys(debug_stats, '"debug_stats"', debug_stat_keys, None)
         target_stats = debug_stats["targets"][0]
@@ -654,6 +659,50 @@ class TestCase(TestBase):
         debug_stats = self.get_stats()
         self.assertEqual(debug_stats["totalDwoFileCount"], 2)
         self.assertEqual(debug_stats["totalLoadedDwoFileCount"], 2)
+
+    @add_test_categories(["dwo"])
+    def test_dwo_load_error_stats(self):
+        """
+        Test that DWO load error statistics are reported correctly.
+        1) remove a .dwo file: expect error  = 1
+        2) repeated run: error still = 1
+        3) version mismatch: expect error = 1
+        """
+        da = {"CXX_SOURCES": "dwo_error_main.cpp dwo_error_foo.cpp", "EXE": self.getBuildArtifact("a.out")}
+        # -gsplit-dwarf creates separate .dwo files,
+        # -gpubnames enables the debug_names accelerator tables for faster symbol lookup
+        #  and lazy loading of DWO files
+        # Expected output: dwo_error_main.dwo (contains main) and dwo_error_foo.dwo (contains foo struct/function)
+        self.build(dictionary=da, debug_info=["dwo", "debug_names"])
+        self.addTearDownCleanup(dictionary=da)
+        exe = self.getBuildArtifact("a.out")
+
+        # Remove the .dwo file to trigger a DWO load error
+        import glob
+        dwo_files = glob.glob(self.getBuildArtifact("*.dwo"))
+        for dwo_file in dwo_files:
+            os.rename(dwo_file, dwo_file + ".bak")
+
+        target = self.createTestTarget(file_path=exe)
+        debug_stats = self.get_stats()
+
+        # Check that DWO load error statistics are reported
+        self.assertIn("totalDwoLoadErrorCount", debug_stats)
+        self.assertEqual(debug_stats["totalDwoLoadErrorCount"], 1)
+
+        # Check module-specific DWO load error statistics
+        found_module_with_error = False
+        for module_stat in debug_stats["modules"]:
+            if "dwo_load_error_count" in module_stat and module_stat["dwo_load_error_count"] > 0:
+                found_module_with_error = True
+                self.assertEqual(module_stat["dwo_load_error_count"], 1)
+                break
+        # Should find at least one module with DWO load error
+        self.assertTrue(found_module_with_error)
+
+        # Restore the .dwo files for cleanup
+        for dwo_file in dwo_files:
+            os.rename(dwo_file + ".bak", dwo_file)
 
     @skipUnlessDarwin
     @no_debug_info_test

@@ -1919,6 +1919,8 @@ SymbolFileDWARF::GetDwoSymbolFileForCompileUnit(
         error_dwo_path.GetPath().c_str(), cu_die.GetOffset()));
 
     if (m_dwo_warning_issued.test_and_set(std::memory_order_relaxed) == false) {
+      // Record if we meet a dwo file missing error.
+      m_dwo_load_error_count.fetch_add(1, std::memory_order_relaxed);
       GetObjectFile()->GetModule()->ReportWarning(
           "unable to locate separate debug file (dwo, dwp). Debugging will be "
           "degraded.");
@@ -2039,6 +2041,8 @@ void SymbolFileDWARF::UpdateExternalModuleListIfNeeded() {
       continue;
 
     if (dwo_id != dwo_dwo_id) {
+      // Record if we meet a dwo file mismatch error.
+      m_dwo_load_error_count.fetch_add(1, std::memory_order_relaxed);
       GetObjectFile()->GetModule()->ReportWarning(
           "Module {0} is out-of-date (hash mismatch).\n"
           "Type information from this module may be incomplete or inconsistent "
@@ -4456,4 +4460,11 @@ std::pair<uint32_t, uint32_t> SymbolFileDWARF::GetDwoFileCounts() {
   }
 
   return {loaded_dwo_count, total_dwo_count};
+}
+
+uint32_t SymbolFileDWARF::GetDwoLoadErrorCount() {
+  Log *log = GetLog(DWARFLog::DebugInfo);
+  uint32_t count = m_dwo_load_error_count.load(std::memory_order_relaxed);
+  LLDB_LOG(log, "Get dwo load error count: {0}", count);
+  return count;
 }

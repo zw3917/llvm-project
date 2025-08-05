@@ -287,6 +287,9 @@ public:
   // CUs and total DWO CUs. For non-split-dwarf files, this reports 0 for both.
   std::pair<uint32_t, uint32_t> GetDwoFileCounts() override;
 
+  // Gets the number of dwo load errors happened.
+  uint32_t GetDwoLoadErrorCount() override;
+
   DWARFContext &GetDWARFContext() { return m_context; }
 
   const std::shared_ptr<SymbolFileDWARFDwo> &GetDwpSymbolFile();
@@ -552,6 +555,9 @@ protected:
   lldb::addr_t m_first_code_address = LLDB_INVALID_ADDRESS;
   StatsDuration m_parse_time;
   std::atomic_flag m_dwo_warning_issued = ATOMIC_FLAG_INIT;
+  /// Boolean to record if there are DWO load errors:
+  /// If we failed to load any DWO file and a warning was shown.
+  std::atomic<uint32_t> m_dwo_load_error_count {0};
   /// If this DWARF file a .DWO file or a DWARF .o file on mac when
   /// no dSYM file is being used, this file index will be set to a
   /// valid value that can be used in DIERef objects which will contain
